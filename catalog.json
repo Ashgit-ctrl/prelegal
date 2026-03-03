@@ -1,0 +1,62 @@
+[
+  {
+    "name": "AI Addendum",
+    "description": "An addendum governing the use of AI services, covering AI-generated content, intellectual property rights, disclaimers, and definitions related to AI features within a broader service agreement.",
+    "filename": "templates/AI-Addendum.md"
+  },
+  {
+    "name": "Business Associate Agreement",
+    "description": "A HIPAA-compliant agreement governing the relationship between a covered entity and a business associate that handles protected health information (PHI), covering permitted uses, safeguards, and breach notification obligations.",
+    "filename": "templates/BAA.md"
+  },
+  {
+    "name": "Cloud Service Agreement",
+    "description": "A comprehensive agreement for cloud-hosted software services, covering access and use rights, restrictions, privacy, payment, term and termination, warranties, liability limitations, indemnification, and confidentiality.",
+    "filename": "templates/CSA.md"
+  },
+  {
+    "name": "Data Processing Agreement",
+    "description": "A GDPR and UK GDPR compliant agreement governing how a data processor handles personal data on behalf of a data controller, including processing purposes, security measures, sub-processors, and data subject rights.",
+    "filename": "templates/DPA.md"
+  },
+  {
+    "name": "Design Partner Agreement",
+    "description": "An agreement for early-stage design partnerships where a customer provides feedback and participates in product development in exchange for early access and discounted or free use of the provider's product.",
+    "filename": "templates/design-partner-agreement.md"
+  },
+  {
+    "name": "Mutual Non-Disclosure Agreement",
+    "description": "A bilateral confidentiality agreement for protecting sensitive information shared between two parties during business discussions, covering permitted disclosures, exclusions, and obligations upon termination.",
+    "filename": "templates/Mutual-NDA.md"
+  },
+  {
+    "name": "Mutual NDA Cover Page",
+    "description": "A cover page template for the Mutual Non-Disclosure Agreement, providing fillable fields for party details, effective date, permitted purpose, and governing law.",
+    "filename": "templates/Mutual-NDA-coverpage.md"
+  },
+  {
+    "name": "Partnership Agreement",
+    "description": "An agreement governing a reseller or referral partnership, covering appointment and scope of the partnership, fees and commissions, restrictions, intellectual property, term and termination, and related obligations.",
+    "filename": "templates/Partnership-Agreement.md"
+  },
+  {
+    "name": "Pilot Agreement",
+    "description": "A short-term trial agreement allowing a customer to evaluate a provider's product for a limited period, typically at no charge, with defined scope, restrictions, and transition terms at the end of the pilot.",
+    "filename": "templates/Pilot-Agreement.md"
+  },
+  {
+    "name": "Professional Services Agreement",
+    "description": "An agreement governing the delivery of professional or consulting services, covering statements of work, fees, intellectual property ownership of deliverables, warranties, and liability.",
+    "filename": "templates/psa.md"
+  },
+  {
+    "name": "Service Level Agreement",
+    "description": "An agreement defining the service quality commitments for a cloud service, including uptime targets, incident response times, remedies such as service credits, and related definitions.",
+    "filename": "templates/sla.md"
+  },
+  {
+    "name": "Software License Agreement",
+    "description": "An agreement for on-premise or self-hosted software licensing, covering the license grant, restrictions, updates, payment, warranties, liability limitations, indemnification, and confidentiality.",
+    "filename": "templates/Software-License-Agreement.md"
+  }
+]
