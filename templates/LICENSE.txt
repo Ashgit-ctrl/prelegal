@@ -1,0 +1,35 @@
+The legal document templates in this directory are sourced from Common Paper
+(https://github.com/CommonPaper) and are licensed under the Creative Commons
+Attribution 4.0 International License (CC BY 4.0).
+
+License: https://creativecommons.org/licenses/by/4.0/
+
+Attribution: Common Paper (https://commonpaper.com)
+
+You are free to:
+  - Share: copy and redistribute the material in any medium or format
+  - Adapt: remix, transform, and build upon the material for any purpose,
+    even commercially
+
+Under the following terms:
+  - Attribution: You must give appropriate credit to Common Paper, provide a
+    link to the license, and indicate if changes were made. You may do so in
+    any reasonable manner, but not in any way that suggests the licensor
+    endorses you or your use.
+  - No additional restrictions: You may not apply legal terms or technological
+    measures that legally restrict others from doing anything the license permits.
+
+Templates included in this directory and their sources:
+
+  - AI-Addendum.md          https://github.com/CommonPaper/AI-Addendum
+  - BAA.md                  https://github.com/CommonPaper/BAA
+  - CSA.md                  https://github.com/CommonPaper/CSA
+  - DPA.md                  https://github.com/CommonPaper/DPA
+  - Mutual-NDA.md           https://github.com/CommonPaper/Mutual-NDA
+  - Mutual-NDA-coverpage.md https://github.com/CommonPaper/Mutual-NDA
+  - Partnership-Agreement.md https://github.com/CommonPaper/Partnership-Agreement
+  - Pilot-Agreement.md      https://github.com/CommonPaper/Pilot-Agreement
+  - psa.md                  https://github.com/CommonPaper/PSA
+  - design-partner-agreement.md https://github.com/CommonPaper/Design-Partner-Agreement
+  - sla.md                  https://github.com/CommonPaper/SLA
+  - Software-License-Agreement.md https://github.com/CommonPaper/Software-License-Agreement
