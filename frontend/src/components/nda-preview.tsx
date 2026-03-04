@@ -1,9 +1,10 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import { NDAFormData } from "@/types/nda";
 import { Button } from "@/components/ui/button";
 import { formatDate, getMndaTermText, getConfidentialityTermText, STANDARD_TERMS } from "@/lib/nda-template";
-import { Printer } from "lucide-react";
+import { Download } from "lucide-react";
 
 interface NDAPreviewProps {
   data: NDAFormData;
@@ -235,18 +236,38 @@ function StandardTermsSection({ data }: { data: NDAFormData }) {
 }
 
 export function NDAPreview({ data }: NDAPreviewProps) {
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = useCallback(async () => {
+    setDownloading(true);
+    try {
+      const [{ pdf }, { NDADocument }] = await Promise.all([
+        import("@react-pdf/renderer"),
+        import("./nda-pdf-document"),
+      ]);
+      const blob = await pdf(<NDADocument data={data} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Mutual-NDA.pdf";
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloading(false);
+    }
+  }, [data]);
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold">Document Preview</h2>
-        <Button onClick={() => window.print()} size="sm" className="gap-2">
-          <Printer className="h-4 w-4" />
-          Print / Save PDF
+        <Button onClick={handleDownload} size="sm" className="gap-2" disabled={downloading}>
+          <Download className="h-4 w-4" />
+          {downloading ? "Generating PDF…" : "Download PDF"}
         </Button>
       </div>
 
       <div
-        id="nda-print-area"
         className="flex-1 bg-white border rounded-lg p-8 overflow-auto shadow-sm text-gray-900"
         style={{ fontFamily: "Georgia, serif", fontSize: "14px", lineHeight: "1.6" }}
       >
