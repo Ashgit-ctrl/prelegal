@@ -1,10 +1,9 @@
 "use client";
 
-import { useRef, useCallback } from "react";
 import { NDAFormData } from "@/types/nda";
 import { Button } from "@/components/ui/button";
 import { formatDate, getMndaTermText, getConfidentialityTermText, STANDARD_TERMS } from "@/lib/nda-template";
-import { Download } from "lucide-react";
+import { Printer } from "lucide-react";
 
 interface NDAPreviewProps {
   data: NDAFormData;
@@ -236,37 +235,18 @@ function StandardTermsSection({ data }: { data: NDAFormData }) {
 }
 
 export function NDAPreview({ data }: NDAPreviewProps) {
-  const previewRef = useRef<HTMLDivElement>(null);
-
-  const handleDownloadPdf = useCallback(async () => {
-    if (!previewRef.current) return;
-
-    const html2pdf = (await import("html2pdf.js")).default;
-    const element = previewRef.current;
-
-    const opt = {
-      margin: [15, 15, 15, 15] as [number, number, number, number],
-      filename: "Mutual-NDA.pdf",
-      image: { type: "jpeg" as const, quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" as const },
-    };
-
-    html2pdf().set(opt).from(element).save();
-  }, []);
-
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold">Document Preview</h2>
-        <Button onClick={handleDownloadPdf} size="sm" className="gap-2">
-          <Download className="h-4 w-4" />
-          Download PDF
+        <Button onClick={() => window.print()} size="sm" className="gap-2">
+          <Printer className="h-4 w-4" />
+          Print / Save PDF
         </Button>
       </div>
 
       <div
-        ref={previewRef}
+        id="nda-print-area"
         className="flex-1 bg-white border rounded-lg p-8 overflow-auto shadow-sm text-gray-900"
         style={{ fontFamily: "Georgia, serif", fontSize: "14px", lineHeight: "1.6" }}
       >
