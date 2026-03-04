@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { NDAForm } from "@/components/nda-form";
+import { NDAChat } from "@/components/nda-chat";
 import { NDAPreview } from "@/components/nda-preview";
 import { NDAFormData, defaultFormData } from "@/types/nda";
 import { Separator } from "@/components/ui/separator";
@@ -53,7 +53,7 @@ export default function Home() {
                 Mutual NDA Creator
               </h1>
               <p className="text-xs" style={{ color: "#888888" }}>
-                Fill in the form to generate your Mutual Non-Disclosure Agreement
+                Chat with the AI assistant to generate your Mutual Non-Disclosure Agreement
               </p>
             </div>
           </div>
@@ -78,8 +78,8 @@ export default function Home() {
 
       <main className="max-w-screen-2xl mx-auto px-6 py-6">
         <div className="flex gap-6 h-[calc(100vh-100px)]">
-          <aside className="w-[380px] shrink-0 overflow-y-auto pr-2">
-            <NDAForm data={formData} onChange={setFormData} />
+          <aside className="w-[380px] shrink-0 overflow-hidden flex flex-col">
+            <NDAChat data={formData} onDataChange={setFormData} />
           </aside>
 
           <Separator orientation="vertical" />

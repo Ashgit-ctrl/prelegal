@@ -18,7 +18,7 @@ WORKDIR /app
 
 # Install backend dependencies
 COPY backend/pyproject.toml ./backend/
-RUN cd backend && uv pip install --system fastapi "uvicorn[standard]" aiosqlite
+RUN cd backend && uv pip install --system fastapi "uvicorn[standard]" aiosqlite "litellm>=1.56.0" "pydantic>=2.0.0"
 
 # Copy backend source
 COPY backend/ ./backend/
