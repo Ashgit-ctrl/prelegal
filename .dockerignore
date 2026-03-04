@@ -1,0 +1,7 @@
+frontend/node_modules
+frontend/.next
+frontend/out
+backend/__pycache__
+backend/.venv
+*.db
+.git
