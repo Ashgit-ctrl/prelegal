@@ -8,7 +8,7 @@ The available documents are covered in the catalog.json file in the project root
 
 @catalog.json
 
-The current implementation is at V1 foundation stage: a Mutual NDA form with live preview and PDF download, behind a fake login screen, served via FastAPI in Docker.
+The current implementation has an AI chat interface (left panel) that guides the user through filling in the Mutual NDA, with a live preview (right panel) and PDF download, behind a fake login screen, served via FastAPI in Docker.
 
 ## Development process
 
@@ -67,10 +67,16 @@ Backend available at http://localhost:8000
 - Fake login screen — collects name + email, stored in `localStorage`, gates access to main app (no real auth)
 - Start/stop scripts for Mac, Linux, and Windows
 
+### Completed (PL-5)
+- AI chat interface replaces the manual form (left panel)
+- `POST /api/chat` backend endpoint using LiteLLM → OpenRouter → Cerebras (`openrouter/openai/gpt-oss-120b`) with Pydantic structured outputs
+- AI greets the user on load, asks conversational questions, and populates the NDA preview in real-time
+- `litellm` and `pydantic` added to backend deps; `env_file: .env` added to docker-compose
+
 ### Not Yet Implemented
-- PL-5: AI chat interface, LiteLLM/OpenRouter/Cerebras integration, structured outputs
 - PL-6: Support for all 11 document types, document-type routing
 - PL-7: Real user authentication (JWT, bcrypt), document persistence, My Documents
 
 ### Current API Endpoints
 - `GET /api/health` - Health check
+- `POST /api/chat` - AI chat; accepts `{ messages, currentData }`, returns `{ message, fields }`
