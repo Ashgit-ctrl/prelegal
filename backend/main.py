@@ -110,9 +110,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Prelegal API", lifespan=lifespan)
 
+_cors_origins_env = os.environ.get("CORS_ORIGINS", "")
+CORS_ORIGINS = (
+    [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
+    if _cors_origins_env
+    else [APP_BASE_URL, "http://localhost:8000", "http://localhost:3000"]
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[APP_BASE_URL, "http://localhost:8000", "http://localhost:3000"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
