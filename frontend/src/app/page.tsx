@@ -140,7 +140,7 @@ export default function Home() {
   const isNDA = documentType === "Mutual Non-Disclosure Agreement";
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
+    <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b sticky top-0 z-10">
         <div className="px-6 py-4 flex items-center justify-between">

@@ -8,7 +8,7 @@ The available documents are covered in the catalog.json file in the project root
 
 @catalog.json
 
-The current implementation has an AI chat interface (left panel) that guides the user through drafting any of the 11 supported legal documents, with a live preview (right panel) and PDF download, behind a fake login screen, served via FastAPI in Docker.
+The current implementation has an AI chat interface (left panel) that guides the user through drafting any of the 11 supported legal documents, with a live preview (right panel) and PDF download, behind a real JWT-based login/signup screen, served via FastAPI in Docker. Documents are persisted per-user in SQLite and accessible from a collapsible "My Documents" sidebar.
 
 ## Development process
 
@@ -84,10 +84,31 @@ Backend available at http://localhost:8000
 - `GET /api/catalog` endpoint returns catalog
 - `POST /api/chat` updated: accepts `documentType`, returns `{ message, documentType, fields, isComplete }`
 
+### Completed (PL-7)
+- Real authentication: sign up (`POST /api/auth/register`), sign in (`POST /api/auth/login`), forgot/reset password via SMTP email (`POST /api/auth/forgot-password`, `POST /api/auth/reset-password`)
+- JWT tokens (`python-jose`), bcrypt password hashing (used directly — NOT passlib, which is incompatible with bcrypt 4.x)
+- Reset tokens: raw UUID sent in email, SHA-256 hash stored in DB
+- Document persistence: SQLite `documents` table, per-user isolation, auto-saved on every AI turn
+- `AuthProvider` context (`frontend/src/contexts/auth-context.tsx`) with JWT in `localStorage`; `authFetch` helper (`frontend/src/lib/api.ts`) adds `Authorization: Bearer` header
+- Collapsible "My Documents" sidebar (280px) — list, open, delete, new document
+- Draft disclaimer amber banner on all document previews
+- Layout fixed to `h-screen` so chat panel scrolls internally without scrolling the page
+- `python-jose[cryptography]`, `bcrypt>=4.0`, `aiosmtplib>=3.0` added to backend deps
+- Docker volume `prelegal_data:/data` for persistent DB across container restarts
+- New pages: `/signup`, `/forgot-password`, `/reset-password`
+
 ### Not Yet Implemented
-- PL-7: Real user authentication (JWT, bcrypt), document persistence, My Documents
+- (nothing planned)
 
 ### Current API Endpoints
 - `GET /api/health` - Health check
 - `GET /api/catalog` - Returns list of supported documents
 - `POST /api/chat` - AI chat; accepts `{ messages, currentData, documentType }`, returns `{ message, documentType, fields, isComplete }`
+- `POST /api/auth/register` - Create account
+- `POST /api/auth/login` - Sign in, returns JWT
+- `POST /api/auth/forgot-password` - Send password reset email
+- `POST /api/auth/reset-password` - Reset password with token
+- `GET /api/documents` - List user's documents
+- `POST /api/documents` - Create document
+- `PUT /api/documents/{id}` - Update document
+- `DELETE /api/documents/{id}` - Delete document

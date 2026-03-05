@@ -40,7 +40,7 @@ export function DocumentChat({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const initialized = useRef(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   async function fetchAIResponse(
@@ -99,7 +99,8 @@ export function DocumentChat({
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = messagesContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages, loading]);
 
   // Restore focus to the textarea after loading completes
@@ -140,7 +141,7 @@ export function DocumentChat({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.map((msg, i) => (
           <div
             key={i}
@@ -177,7 +178,6 @@ export function DocumentChat({
           </div>
         )}
 
-        <div ref={bottomRef} />
       </div>
 
       {/* Input */}
