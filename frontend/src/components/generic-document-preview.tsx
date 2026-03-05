@@ -156,13 +156,10 @@ export function GenericDocumentPreview({
           </div>
           <Button
             onClick={handleDownload}
-            disabled={downloading || !isComplete}
+            disabled={downloading}
             size="sm"
             className="text-white shrink-0"
-            style={{
-              backgroundColor: isComplete ? "#753991" : "#9ca3af",
-              cursor: isComplete ? "pointer" : "not-allowed",
-            }}
+            style={{ backgroundColor: "#753991" }}
           >
             {downloading ? (
               "Generating…"

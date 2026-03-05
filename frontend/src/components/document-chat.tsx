@@ -41,6 +41,7 @@ export function DocumentChat({
   const [loading, setLoading] = useState(false);
   const initialized = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   async function fetchAIResponse(
     history: Message[],
@@ -100,6 +101,13 @@ export function DocumentChat({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  // Restore focus to the textarea after loading completes
+  useEffect(() => {
+    if (!loading) {
+      textareaRef.current?.focus();
+    }
+  }, [loading]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -178,6 +186,7 @@ export function DocumentChat({
         className="p-3 border-t bg-gray-50 shrink-0 flex gap-2 items-end"
       >
         <Textarea
+          ref={textareaRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {

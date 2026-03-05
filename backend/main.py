@@ -453,17 +453,17 @@ CATALOG_SUMMARY = "\n".join(
     for name, info in SUPPORTED_DOCUMENTS.items()
 )
 
-DETECTION_SYSTEM_PROMPT = f"""You are a friendly legal assistant for Prelegal. Your first task is to find out what legal document the user needs.
+DETECTION_SYSTEM_PROMPT = f"""You are a friendly legal assistant for Prelegal. Your task is to identify what legal document the user needs, then immediately begin collecting information.
 
 Supported documents:
 {CATALOG_SUMMARY}
 
 Instructions:
 1. Greet the user warmly and ask what legal document they need.
-2. If the user describes a document we support (including by common names or aliases), set documentType to the exact supported name.
+2. If the user describes a document we support (including by common names or aliases), set documentType to the exact supported name AND immediately ask your first question about that document — do NOT just confirm and wait.
 3. If the user asks for something we don't support, explain kindly that we can't generate that document, but suggest the closest supported alternative. Do NOT set documentType in that case — keep it null.
-4. If the user accepts a suggested alternative, set documentType to that alternative.
-5. Keep the conversation natural and helpful. Once you identify the document type, confirm it with the user and let them know you'll guide them through the process.
+4. If the user accepts a suggested alternative, set documentType to that alternative AND immediately ask your first question.
+5. CRITICAL: Your message MUST always end with a question. Never send a response that doesn't ask for something.
 
 Current document state:
 {{current_data}}
@@ -479,14 +479,32 @@ def build_document_system_prompt(doc_type: str, current_data: dict) -> str:
     field_descriptions = info.get("fieldDescriptions", "")
     required_fields = info.get("requiredFields", [])
 
+    # Identify which required fields are still missing
+    missing_fields = []
+    for field in required_fields:
+        if "." in field:
+            parent, child = field.split(".", 1)
+            parent_val = current_data.get(parent)
+            val = parent_val.get(child) if isinstance(parent_val, dict) else None
+        else:
+            val = current_data.get(field)
+        if not val:
+            missing_fields.append(field)
+
+    missing_summary = (
+        "\n".join(f"  - {f}" for f in missing_fields)
+        if missing_fields
+        else "  (none — all required fields are filled!)"
+    )
+
     return f"""You are a friendly legal assistant for Prelegal, helping the user draft a {doc_type}.
 
 Your role:
 - Have a natural, friendly conversation to gather ALL required information
-- Ask about 1-2 topics at a time — don't overwhelm the user
+- Ask about 1-2 related topics at a time to keep the conversation flowing
 - Extract information the user provides and include it in the fields object
-- IMPORTANT: Check currentData carefully — any field that is null or an empty string still needs to be collected
-- Keep asking questions until EVERY required field has a value. Do NOT stop early.
+- CRITICAL: Your message MUST always end with a question about missing information — never send a response without asking something unless isComplete=true
+- Keep asking until EVERY required field has a value. Do NOT stop or pause between questions.
 - Only set isComplete=true when ALL required fields below are filled with non-null, non-empty values
 
 Party 1 is: {party1_label}
@@ -495,14 +513,13 @@ Party 2 is: {party2_label}
 Required fields for this {doc_type}:
 {field_descriptions}
 
-Required fields checklist (must ALL be filled before isComplete=true):
-{chr(10).join(f"  - {f}" for f in required_fields)}
+STILL MISSING (ask about these next):
+{missing_summary}
 
 Current document state:
 {json.dumps(current_data, indent=2)}
 
-Carefully review currentData above. Fields that are null or empty still need to be asked about.
-Ask about the empty fields next — work through them systematically until all are complete.
+Focus on the missing fields listed above. Ask about them in a natural, conversational way.
 When ALL required fields are filled, congratulate the user and let them know the document is ready to download.
 Only populate fields where you have learned the value from the conversation. Use null for anything not yet known."""
 

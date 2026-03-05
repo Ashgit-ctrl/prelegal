@@ -5,21 +5,23 @@ const s = StyleSheet.create({
   page: { fontFamily: "Times-Roman", fontSize: 10, padding: 54, color: "#1a1a1a" },
   title: { fontFamily: "Times-Bold", fontSize: 18, textAlign: "center", marginBottom: 4, color: "#032147" },
   subtitle: { fontSize: 10, textAlign: "center", color: "#888888", marginBottom: 24 },
-  sectionHeader: { fontFamily: "Times-Bold", fontSize: 11, color: "#032147", marginTop: 16, marginBottom: 6, borderBottomWidth: 1, borderBottomColor: "#e5e7eb", paddingBottom: 3 },
+  sectionHeader: { fontFamily: "Times-Bold", fontSize: 11, color: "#032147", marginTop: 16, marginBottom: 6, borderBottomWidth: 1, borderBottomColor: "#e5e7eb", borderBottomStyle: "solid", paddingBottom: 3 },
   row: { flexDirection: "row", marginBottom: 4 },
   label: { fontFamily: "Times-Bold", width: 160, fontSize: 10, color: "#374151" },
   value: { flex: 1, fontSize: 10, color: "#1e40af", fontFamily: "Times-Italic" },
   emptyValue: { flex: 1, fontSize: 10, color: "#d97706", fontFamily: "Times-Italic" },
-  partyBox: { flex: 1, border: 1, borderColor: "#e5e7eb", padding: 10, borderRadius: 3 },
+  // Use individual border properties — react-pdf does not support the `border` shorthand
+  partyBox: { flex: 1, borderWidth: 1, borderColor: "#e5e7eb", borderStyle: "solid", padding: 10 },
+  partyBoxLeft: { flex: 1, borderWidth: 1, borderColor: "#e5e7eb", borderStyle: "solid", padding: 10, marginRight: 8 },
   partyTitle: { fontFamily: "Times-Bold", fontSize: 10, color: "#032147", marginBottom: 6 },
   partyRow: { flexDirection: "row", marginBottom: 3 },
   partyLabel: { fontFamily: "Times-Bold", fontSize: 9, color: "#6b7280", width: 80 },
   partyValue: { flex: 1, fontSize: 9, color: "#1e40af" },
-  partiesRow: { flexDirection: "row", gap: 12, marginBottom: 8 },
-  sigRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#e5e7eb", paddingVertical: 6 },
+  // No `gap` — use marginRight on the first child instead
+  partiesRow: { flexDirection: "row", marginBottom: 8 },
+  sigRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#e5e7eb", borderBottomStyle: "solid", paddingTop: 6, paddingBottom: 6 },
   sigLabel: { fontFamily: "Times-Bold", fontSize: 9, color: "#6b7280", width: 100 },
   sigCell: { flex: 1, fontSize: 9, color: "#9ca3af", textAlign: "center" },
-  complete: { fontSize: 9, color: "#16a34a", marginTop: 8 },
 });
 
 function FieldRow({ label, value }: { label: string; value: string | undefined | null }) {
@@ -70,7 +72,7 @@ export function GenericDocumentPDF({ documentType, fields, party1Label, party2La
         <Text style={s.title}>{documentType}</Text>
         <Text style={s.subtitle}>Cover Page</Text>
 
-        {/* Key Dates & Law */}
+        {/* Key Terms */}
         <Text style={s.sectionHeader}>Key Terms</Text>
         <FieldRow label="Effective Date" value={fields.effectiveDate} />
         <FieldRow label="Governing Law" value={fields.governingLaw} />
@@ -82,7 +84,7 @@ export function GenericDocumentPDF({ documentType, fields, party1Label, party2La
         {/* Parties */}
         <Text style={s.sectionHeader}>Parties</Text>
         <View style={s.partiesRow}>
-          <View style={s.partyBox}>
+          <View style={s.partyBoxLeft}>
             <Text style={s.partyTitle}>{party1Label}</Text>
             <View style={s.partyRow}><Text style={s.partyLabel}>Company</Text><Text style={s.partyValue}>{fields.party1?.company || "[Not provided]"}</Text></View>
             <View style={s.partyRow}><Text style={s.partyLabel}>Name</Text><Text style={s.partyValue}>{fields.party1?.printName || "[Not provided]"}</Text></View>
