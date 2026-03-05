@@ -37,6 +37,21 @@ def make_mock_completion(message: str, doc_type=None, fields=None, is_complete=F
     return mock_response
 
 
+def register_user(client, name="Alice", email="alice@example.com", password="password123"):
+    """Helper: register a user and return the auth token."""
+    resp = client.post(
+        "/api/auth/register",
+        json={"name": name, "email": email, "password": password},
+    )
+    assert resp.status_code == 201, resp.text
+    return resp.json()["token"]
+
+
+# ---------------------------------------------------------------------------
+# Health & Catalog
+# ---------------------------------------------------------------------------
+
+
 class TestHealthEndpoint:
     def test_health_ok(self, client):
         resp = client.get("/api/health")
@@ -55,6 +70,301 @@ class TestCatalogEndpoint:
         resp = client.get("/api/catalog")
         names = [item["name"] for item in resp.json()]
         assert "Mutual Non-Disclosure Agreement" in names
+
+
+# ---------------------------------------------------------------------------
+# Auth: Register
+# ---------------------------------------------------------------------------
+
+
+class TestRegister:
+    def test_register_success(self, client):
+        resp = client.post(
+            "/api/auth/register",
+            json={"name": "Alice", "email": "alice@example.com", "password": "password123"},
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert "token" in data
+        assert data["user"]["email"] == "alice@example.com"
+        assert data["user"]["name"] == "Alice"
+
+    def test_register_duplicate_email(self, client):
+        payload = {"name": "Alice", "email": "alice@example.com", "password": "password123"}
+        client.post("/api/auth/register", json=payload)
+        resp = client.post("/api/auth/register", json=payload)
+        assert resp.status_code == 409
+
+    def test_register_short_password(self, client):
+        resp = client.post(
+            "/api/auth/register",
+            json={"name": "Alice", "email": "alice@example.com", "password": "short"},
+        )
+        assert resp.status_code == 400
+        assert "8 characters" in resp.json()["detail"]
+
+    def test_register_returns_jwt(self, client):
+        resp = client.post(
+            "/api/auth/register",
+            json={"name": "Bob", "email": "bob@example.com", "password": "password123"},
+        )
+        token = resp.json()["token"]
+        # JWT has three dot-separated parts
+        assert len(token.split(".")) == 3
+
+
+# ---------------------------------------------------------------------------
+# Auth: Login
+# ---------------------------------------------------------------------------
+
+
+class TestLogin:
+    def test_login_success(self, client):
+        register_user(client)
+        resp = client.post(
+            "/api/auth/login",
+            json={"email": "alice@example.com", "password": "password123"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "token" in data
+        assert data["user"]["email"] == "alice@example.com"
+
+    def test_login_wrong_password(self, client):
+        register_user(client)
+        resp = client.post(
+            "/api/auth/login",
+            json={"email": "alice@example.com", "password": "wrongpassword"},
+        )
+        assert resp.status_code == 401
+
+    def test_login_unknown_email(self, client):
+        resp = client.post(
+            "/api/auth/login",
+            json={"email": "nobody@example.com", "password": "password123"},
+        )
+        assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Auth: Forgot / Reset password
+# ---------------------------------------------------------------------------
+
+
+class TestPasswordReset:
+    def test_forgot_password_always_200(self, client):
+        """Should return 200 regardless of whether email exists (prevent enumeration)."""
+        resp = client.post(
+            "/api/auth/forgot-password",
+            json={"email": "anyone@example.com"},
+        )
+        assert resp.status_code == 200
+        assert "message" in resp.json()
+
+    def test_reset_password_invalid_token(self, client):
+        resp = client.post(
+            "/api/auth/reset-password",
+            json={"token": "invalid-token", "new_password": "newpassword123"},
+        )
+        assert resp.status_code == 400
+
+    def test_reset_password_short_password(self, client):
+        resp = client.post(
+            "/api/auth/reset-password",
+            json={"token": "sometoken", "new_password": "short"},
+        )
+        assert resp.status_code == 400
+
+    def test_reset_password_full_flow(self, client):
+        """Register, set a valid reset token manually, then reset password."""
+        import main as m
+        import uuid
+        from datetime import datetime, timedelta, timezone
+
+        # Register user
+        register_user(client)
+
+        # Manually insert a reset token (hashed, matching production logic)
+        import hashlib
+        raw_token = str(uuid.uuid4())
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        expires = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+        conn = m.get_db()
+        try:
+            conn.execute(
+                "UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE email = ?",
+                (token_hash, expires, "alice@example.com"),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        token = raw_token
+
+        # Reset password
+        resp = client.post(
+            "/api/auth/reset-password",
+            json={"token": token, "new_password": "newpassword123"},
+        )
+        assert resp.status_code == 200
+
+        # Login with new password
+        resp = client.post(
+            "/api/auth/login",
+            json={"email": "alice@example.com", "password": "newpassword123"},
+        )
+        assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Documents
+# ---------------------------------------------------------------------------
+
+
+class TestDocuments:
+    def test_list_documents_requires_auth(self, client):
+        resp = client.get("/api/documents")
+        assert resp.status_code == 401
+
+    def test_create_document_requires_auth(self, client):
+        resp = client.post("/api/documents", json={"title": "Test", "isComplete": False})
+        assert resp.status_code == 401
+
+    def test_list_documents_empty(self, client):
+        token = register_user(client)
+        resp = client.get(
+            "/api/documents",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_create_and_list_document(self, client):
+        token = register_user(client)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Create
+        resp = client.post(
+            "/api/documents",
+            headers=headers,
+            json={
+                "title": "Acme × Beta",
+                "documentType": "Mutual Non-Disclosure Agreement",
+                "fields": {"effectiveDate": "2026-01-01"},
+                "isComplete": False,
+            },
+        )
+        assert resp.status_code == 201
+        doc = resp.json()
+        assert doc["id"] is not None
+        assert doc["title"] == "Acme × Beta"
+        assert doc["documentType"] == "Mutual Non-Disclosure Agreement"
+
+        # List
+        resp = client.get("/api/documents", headers=headers)
+        assert resp.status_code == 200
+        docs = resp.json()
+        assert len(docs) == 1
+        assert docs[0]["title"] == "Acme × Beta"
+
+    def test_update_document(self, client):
+        token = register_user(client)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Create
+        create_resp = client.post(
+            "/api/documents",
+            headers=headers,
+            json={"title": "Draft Doc", "isComplete": False},
+        )
+        doc_id = create_resp.json()["id"]
+
+        # Update
+        resp = client.put(
+            f"/api/documents/{doc_id}",
+            headers=headers,
+            json={"title": "Final Doc", "isComplete": True},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["title"] == "Final Doc"
+        assert data["isComplete"] is True
+
+    def test_delete_document(self, client):
+        token = register_user(client)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Create
+        create_resp = client.post(
+            "/api/documents",
+            headers=headers,
+            json={"title": "To Delete", "isComplete": False},
+        )
+        doc_id = create_resp.json()["id"]
+
+        # Delete
+        resp = client.delete(f"/api/documents/{doc_id}", headers=headers)
+        assert resp.status_code == 200
+
+        # Verify gone
+        list_resp = client.get("/api/documents", headers=headers)
+        assert list_resp.json() == []
+
+    def test_cannot_access_other_users_document(self, client):
+        token1 = register_user(client, name="Alice", email="alice@example.com")
+        token2 = register_user(client, name="Bob", email="bob@example.com")
+
+        # Alice creates a document
+        create_resp = client.post(
+            "/api/documents",
+            headers={"Authorization": f"Bearer {token1}"},
+            json={"title": "Alice's Doc", "isComplete": False},
+        )
+        doc_id = create_resp.json()["id"]
+
+        # Bob tries to update Alice's document
+        resp = client.put(
+            f"/api/documents/{doc_id}",
+            headers={"Authorization": f"Bearer {token2}"},
+            json={"title": "Hijacked"},
+        )
+        assert resp.status_code == 404
+
+        # Bob tries to delete Alice's document
+        resp = client.delete(
+            f"/api/documents/{doc_id}",
+            headers={"Authorization": f"Bearer {token2}"},
+        )
+        assert resp.status_code == 404
+
+    def test_documents_isolated_per_user(self, client):
+        token1 = register_user(client, name="Alice", email="alice@example.com")
+        token2 = register_user(client, name="Bob", email="bob@example.com")
+
+        # Alice creates a document
+        client.post(
+            "/api/documents",
+            headers={"Authorization": f"Bearer {token1}"},
+            json={"title": "Alice's Doc", "isComplete": False},
+        )
+
+        # Bob should see an empty list
+        resp = client.get(
+            "/api/documents",
+            headers={"Authorization": f"Bearer {token2}"},
+        )
+        assert resp.json() == []
+
+    def test_invalid_token_returns_401(self, client):
+        resp = client.get(
+            "/api/documents",
+            headers={"Authorization": "Bearer invalid.token.here"},
+        )
+        assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Chat (unchanged behaviour)
+# ---------------------------------------------------------------------------
 
 
 class TestChatEndpoint:

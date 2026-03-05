@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import { NDAFormData } from "@/types/nda";
 import { Button } from "@/components/ui/button";
 import { formatDate, getMndaTermText, getConfidentialityTermText, STANDARD_TERMS } from "@/lib/nda-template";
-import { Download } from "lucide-react";
+import { Download, AlertTriangle } from "lucide-react";
 
 interface NDAPreviewProps {
   data: NDAFormData;
@@ -276,6 +276,17 @@ export function NDAPreview({ data }: NDAPreviewProps) {
         <div className="mt-12 pt-8 border-t-2">
           <StandardTermsSection data={data} />
         </div>
+      </div>
+
+      {/* Disclaimer */}
+      <div
+        className="mt-3 flex items-start gap-2 rounded-lg px-4 py-3 text-xs border"
+        style={{ backgroundColor: "#fffbeb", borderColor: "#fde68a", color: "#92400e" }}
+      >
+        <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" style={{ color: "#d97706" }} />
+        <span>
+          <strong>Draft document only.</strong> This document is generated for discussion purposes and is subject to legal review. It does not constitute legal advice. Please consult a qualified attorney before executing any agreement.
+        </span>
       </div>
     </div>
   );

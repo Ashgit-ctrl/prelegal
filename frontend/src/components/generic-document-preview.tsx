@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download, CheckCircle } from "lucide-react";
+import { Download, CheckCircle, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DocumentFieldsUpdate, PartyInfoUpdate } from "@/types/document";
 
@@ -247,6 +247,17 @@ export function GenericDocumentPreview({
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Disclaimer */}
+      <div
+        className="mx-6 mb-6 mt-2 flex items-start gap-2 rounded-lg px-4 py-3 text-xs border"
+        style={{ backgroundColor: "#fffbeb", borderColor: "#fde68a", color: "#92400e" }}
+      >
+        <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" style={{ color: "#d97706" }} />
+        <span>
+          <strong>Draft document only.</strong> This document is generated for discussion purposes and is subject to legal review. It does not constitute legal advice. Please consult a qualified attorney before executing any agreement.
+        </span>
       </div>
     </div>
   );

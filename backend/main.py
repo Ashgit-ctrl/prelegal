@@ -1,21 +1,93 @@
 import sqlite3
 import os
 import json
+import uuid
+import hashlib
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, List, Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 from litellm import completion
+import bcrypt as _bcrypt
+from jose import JWTError, jwt
+import aiosmtplib
+from email.message import EmailMessage
 
-DB_PATH = Path("/tmp/prelegal.db")
+DB_PATH = Path(os.environ.get("DB_PATH", "/data/prelegal.db"))
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend" / "out"
 CATALOG_PATH = Path(__file__).parent.parent / "catalog.json"
 
 MODEL = "openrouter/openai/gpt-oss-120b"
 EXTRA_BODY = {"provider": {"order": ["cerebras"]}}
+
+SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+RESET_TOKEN_EXPIRE_HOURS = 1
+APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8000")
+
+bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def hash_password(password: str) -> str:
+    return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    return _bcrypt.checkpw(password.encode(), hashed.encode())
+
+
+# ---------------------------------------------------------------------------
+# Database helpers
+# ---------------------------------------------------------------------------
+
+
+def get_db():
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db() -> None:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = get_db()
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            reset_token TEXT,
+            reset_token_expires TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            document_type TEXT,
+            fields_json TEXT NOT NULL DEFAULT '{}',
+            is_complete INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
 
 
 def load_catalog() -> list[dict]:
@@ -23,24 +95,6 @@ def load_catalog() -> list[dict]:
         with open(CATALOG_PATH) as f:
             return json.load(f)
     return []
-
-
-def init_db() -> None:
-    if DB_PATH.exists():
-        DB_PATH.unlink()
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute(
-        """
-        CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            email TEXT NOT NULL UNIQUE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    conn.commit()
-    conn.close()
 
 
 CATALOG: list[dict] = []
@@ -55,6 +109,74 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Prelegal API", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[APP_BASE_URL, "http://localhost:8000", "http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ---------------------------------------------------------------------------
+# Auth helpers
+# ---------------------------------------------------------------------------
+
+
+def create_access_token(user_id: int, email: str, name: str) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    payload = {"sub": str(user_id), "email": email, "name": name, "exp": expire}
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+async def get_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+) -> dict:
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+
+async def send_reset_email(to_email: str, name: str, reset_link: str) -> None:
+    smtp_host = os.environ.get("SMTP_HOST")
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_user = os.environ.get("SMTP_USER")
+    smtp_pass = os.environ.get("SMTP_PASS")
+
+    if not smtp_host or not smtp_user or not smtp_pass:
+        raise ValueError("SMTP credentials not configured")
+
+    msg = EmailMessage()
+    msg["From"] = smtp_user
+    msg["To"] = to_email
+    msg["Subject"] = "Reset your Prelegal password"
+    msg.set_content(
+        f"""Hi {name},
+
+You requested a password reset for your Prelegal account.
+Click the link below to reset your password (expires in {RESET_TOKEN_EXPIRE_HOURS} hour):
+
+{reset_link}
+
+If you didn't request this, you can safely ignore this email.
+
+— The Prelegal Team
+"""
+    )
+
+    await aiosmtplib.send(
+        msg,
+        hostname=smtp_host,
+        port=smtp_port,
+        username=smtp_user,
+        password=smtp_pass,
+        start_tls=True,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -144,6 +266,67 @@ class ChatRequest(BaseModel):
     messages: List[ChatMessage]
     currentData: dict
     documentType: Optional[str] = None
+
+
+# --- Auth models ---
+
+
+class UserInfo(BaseModel):
+    id: int
+    name: str
+    email: str
+
+
+class AuthResponse(BaseModel):
+    token: str
+    user: UserInfo
+
+
+class RegisterRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+# --- Document models ---
+
+
+class SaveDocumentRequest(BaseModel):
+    title: str
+    documentType: Optional[str] = None
+    fields: dict = {}
+    isComplete: bool = False
+
+
+class UpdateDocumentRequest(BaseModel):
+    title: Optional[str] = None
+    documentType: Optional[str] = None
+    fields: Optional[dict] = None
+    isComplete: Optional[bool] = None
+
+
+class DocumentResponse(BaseModel):
+    id: int
+    title: str
+    documentType: Optional[str] = None
+    fields: dict = {}
+    isComplete: bool = False
+    createdAt: str
+    updatedAt: str
 
 
 # ---------------------------------------------------------------------------
@@ -522,6 +705,263 @@ Current document state:
 Focus on the missing fields listed above. Ask about them in a natural, conversational way.
 When ALL required fields are filled, congratulate the user and let them know the document is ready to download.
 Only populate fields where you have learned the value from the conversation. Use null for anything not yet known."""
+
+
+# ---------------------------------------------------------------------------
+# Auth endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/auth/register", response_model=AuthResponse, status_code=201)
+async def register(request: RegisterRequest):
+    if len(request.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    conn = get_db()
+    try:
+        existing = conn.execute(
+            "SELECT id FROM users WHERE email = ?", (request.email,)
+        ).fetchone()
+        if existing:
+            raise HTTPException(
+                status_code=409, detail="An account with this email already exists"
+            )
+
+        password_hash = hash_password(request.password)
+        cursor = conn.execute(
+            "INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)",
+            (request.name, request.email, password_hash),
+        )
+        conn.commit()
+        user_id = cursor.lastrowid
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Registration failed: {e}")
+    finally:
+        conn.close()
+
+    user_info = UserInfo(id=user_id, name=request.name, email=request.email)
+    token = create_access_token(user_id, request.email, request.name)
+    return AuthResponse(token=token, user=user_info)
+
+
+@app.post("/api/auth/login", response_model=AuthResponse)
+async def login(request: LoginRequest):
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT id, name, email, password_hash FROM users WHERE email = ?",
+            (request.email,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if not row or not verify_password(request.password, row["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    user_info = UserInfo(id=row["id"], name=row["name"], email=row["email"])
+    token = create_access_token(row["id"], row["email"], row["name"])
+    return AuthResponse(token=token, user=user_info)
+
+
+@app.post("/api/auth/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest):
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT id, name FROM users WHERE email = ?", (request.email,)
+        ).fetchone()
+        if row:
+            raw_token = str(uuid.uuid4())
+            token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+            expires = (
+                datetime.now(timezone.utc) + timedelta(hours=RESET_TOKEN_EXPIRE_HOURS)
+            ).isoformat()
+            conn.execute(
+                "UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE id = ?",
+                (token_hash, expires, row["id"]),
+            )
+            conn.commit()
+            reset_link = f"{APP_BASE_URL}/reset-password?token={raw_token}"
+            try:
+                await send_reset_email(request.email, row["name"], reset_link)
+            except Exception as e:
+                print(f"Warning: failed to send reset email to {request.email}: {e}")
+    finally:
+        conn.close()
+
+    # Always return success to prevent email enumeration
+    return {
+        "message": "If an account with this email exists, you will receive a password reset link shortly."
+    }
+
+
+@app.post("/api/auth/reset-password")
+async def reset_password(request: ResetPasswordRequest):
+    if len(request.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    now = datetime.now(timezone.utc).isoformat()
+    token_hash = hashlib.sha256(request.token.encode()).hexdigest()
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT id FROM users WHERE reset_token = ? AND reset_token_expires > ?",
+            (token_hash, now),
+        ).fetchone()
+
+        if not row:
+            raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+        password_hash = hash_password(request.new_password)
+        conn.execute(
+            "UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?",
+            (password_hash, row["id"]),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {"message": "Password reset successfully"}
+
+
+# ---------------------------------------------------------------------------
+# Document endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/documents", response_model=List[DocumentResponse])
+async def list_documents(current_user: dict = Depends(get_current_user)):
+    user_id = int(current_user["sub"])
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT id, title, document_type, fields_json, is_complete, created_at, updated_at "
+            "FROM documents WHERE user_id = ? ORDER BY updated_at DESC",
+            (user_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    return [
+        DocumentResponse(
+            id=row["id"],
+            title=row["title"],
+            documentType=row["document_type"],
+            fields=json.loads(row["fields_json"]),
+            isComplete=bool(row["is_complete"]),
+            createdAt=row["created_at"],
+            updatedAt=row["updated_at"],
+        )
+        for row in rows
+    ]
+
+
+@app.post("/api/documents", response_model=DocumentResponse, status_code=201)
+async def create_document(
+    request: SaveDocumentRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    user_id = int(current_user["sub"])
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    try:
+        cursor = conn.execute(
+            "INSERT INTO documents (user_id, title, document_type, fields_json, is_complete, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                user_id,
+                request.title,
+                request.documentType,
+                json.dumps(request.fields),
+                int(request.isComplete),
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+        doc_id = cursor.lastrowid
+    finally:
+        conn.close()
+
+    return DocumentResponse(
+        id=doc_id,
+        title=request.title,
+        documentType=request.documentType,
+        fields=request.fields,
+        isComplete=request.isComplete,
+        createdAt=now,
+        updatedAt=now,
+    )
+
+
+@app.put("/api/documents/{doc_id}", response_model=DocumentResponse)
+async def update_document(
+    doc_id: int,
+    request: UpdateDocumentRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    user_id = int(current_user["sub"])
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT * FROM documents WHERE id = ? AND user_id = ?",
+            (doc_id, user_id),
+        ).fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        new_title = request.title if request.title is not None else row["title"]
+        new_doc_type = request.documentType if request.documentType is not None else row["document_type"]
+        new_fields_json = json.dumps(request.fields) if request.fields is not None else row["fields_json"]
+        new_complete = int(request.isComplete) if request.isComplete is not None else row["is_complete"]
+
+        conn.execute(
+            "UPDATE documents SET title = ?, document_type = ?, fields_json = ?, is_complete = ?, updated_at = ? WHERE id = ?",
+            (new_title, new_doc_type, new_fields_json, new_complete, now, doc_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return DocumentResponse(
+        id=doc_id,
+        title=new_title,
+        documentType=new_doc_type,
+        fields=json.loads(new_fields_json),
+        isComplete=bool(new_complete),
+        createdAt=row["created_at"],
+        updatedAt=now,
+    )
+
+
+@app.delete("/api/documents/{doc_id}")
+async def delete_document(doc_id: int, current_user: dict = Depends(get_current_user)):
+    user_id = int(current_user["sub"])
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT id FROM documents WHERE id = ? AND user_id = ?",
+            (doc_id, user_id),
+        ).fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {"message": "Document deleted"}
+
+
+# ---------------------------------------------------------------------------
+# Existing endpoints
+# ---------------------------------------------------------------------------
 
 
 @app.get("/api/health")

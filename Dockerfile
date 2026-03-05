@@ -18,13 +18,24 @@ WORKDIR /app
 
 # Install backend dependencies
 COPY backend/pyproject.toml ./backend/
-RUN cd backend && uv pip install --system fastapi "uvicorn[standard]" aiosqlite "litellm>=1.56.0" "pydantic>=2.0.0"
+RUN uv pip install --system \
+    "fastapi>=0.115.0" \
+    "uvicorn[standard]>=0.32.0" \
+    "aiosqlite>=0.20.0" \
+    "litellm>=1.56.0" \
+    "pydantic>=2.0.0" \
+    "python-jose[cryptography]>=3.3.0" \
+    "bcrypt>=4.0.0" \
+    "aiosmtplib>=3.0.0"
 
 # Copy backend source
 COPY backend/ ./backend/
 
 # Copy built frontend
 COPY --from=frontend-builder /app/frontend/out ./frontend/out
+
+# Ensure data directory exists for persistent DB
+RUN mkdir -p /data
 
 EXPOSE 8000
 
