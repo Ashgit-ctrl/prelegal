@@ -8,7 +8,7 @@ The available documents are covered in the catalog.json file in the project root
 
 @catalog.json
 
-The current implementation has an AI chat interface (left panel) that guides the user through filling in the Mutual NDA, with a live preview (right panel) and PDF download, behind a fake login screen, served via FastAPI in Docker.
+The current implementation has an AI chat interface (left panel) that guides the user through drafting any of the 11 supported legal documents, with a live preview (right panel) and PDF download, behind a fake login screen, served via FastAPI in Docker.
 
 ## Development process
 
@@ -73,10 +73,21 @@ Backend available at http://localhost:8000
 - AI greets the user on load, asks conversational questions, and populates the NDA preview in real-time
 - `litellm` and `pydantic` added to backend deps; `env_file: .env` added to docker-compose
 
+### Completed (PL-6)
+- All 11 document types supported (see catalog.json)
+- Two-phase AI chat: document-type detection → field collection with per-document system prompts
+- `DocumentFieldsUpdate` unified field model covers all document types (TypeScript + Pydantic)
+- `GenericDocumentPreview` live cover-page preview with yellow placeholders for missing fields
+- `GenericDocumentPDF` PDF generation for all document types (`@react-pdf/renderer`)
+  - NOTE: react-pdf does NOT support `border` shorthand or `gap` — always use individual `borderWidth`/`borderStyle`/`borderColor` and `marginRight`
+- AI always asks a question after every response; immediately starts collecting fields after document type is detected
+- `GET /api/catalog` endpoint returns catalog
+- `POST /api/chat` updated: accepts `documentType`, returns `{ message, documentType, fields, isComplete }`
+
 ### Not Yet Implemented
-- PL-6: Support for all 11 document types, document-type routing
 - PL-7: Real user authentication (JWT, bcrypt), document persistence, My Documents
 
 ### Current API Endpoints
 - `GET /api/health` - Health check
-- `POST /api/chat` - AI chat; accepts `{ messages, currentData }`, returns `{ message, fields }`
+- `GET /api/catalog` - Returns list of supported documents
+- `POST /api/chat` - AI chat; accepts `{ messages, currentData, documentType }`, returns `{ message, documentType, fields, isComplete }`
